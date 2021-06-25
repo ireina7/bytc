@@ -41,7 +41,9 @@ object AtomCode:
     import ByteCode.*
 
     case object Empty extends AtomCode(0)
-    case class Raw(byteCode: ByteCode) extends AtomCode(1)
+    case class Raw(byteCode: ByteCode) extends AtomCode(1) {
+        override def toString = byteCode.toString
+    }
     case class LineNumber(line : Int) extends AtomCode(0)
     case class Label(id: String) extends AtomCode(0)
     case class RawByte(u1: U1) extends AtomCode(1)

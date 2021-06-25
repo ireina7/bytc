@@ -8,7 +8,6 @@ import bytc.given
   import Code.*
   println("Hello bytc!")
   
-
   import ClassFile.Operation.*
   val `class` = 
     Define("HelloWorld")

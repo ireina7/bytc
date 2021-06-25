@@ -14,7 +14,7 @@ class ClassFile(val className: String, superName: Option[String] = None) extends
     private val major: U2 = defaultMajor
 
     private var constantPool = new ConstantPool()
-    lazy val codeNameIndex: U2 = constantPool.addString("Code")
+    lazy val codeNameIndex: U2 = constantPool.addString("Code") // Never change this since JVM defines this
     lazy val sourceFileNameIndex: U2 = constantPool.addString("SourceFile")
 
     private var accessFlags: U2 = defaultClassAccessFlags
@@ -172,6 +172,11 @@ object ClassFile:
         case class Method(retTpe: String, name: String, args: String*)(code: Code) extends Operation(newState { cf =>
             val res = for(_ <- cf.addMethod(retTpe, name, args*)(code)) yield cf
             (cf, res)
+        })
+
+        case class Inspect(f: ClassFile => Unit) extends Operation(newState { cf => 
+            f(cf)
+            (cf, Right(cf)) 
         })
 
     end Operation

@@ -75,9 +75,50 @@ class CodeHandler (
         Left(new BytcError(msg))
     }
 
-    def computeMaxStack(abcList : List[AtomCode]) : U2 = {
+    def computeMaxStack(abcList : List[AtomCode]) : Result[U2] = {
         assert(frozen)
-        50
+
+        val actualSize = abcList.map(_.size).sum
+        val codeArray = new Array[AtomCode](actualSize)
+
+        locally {
+            var pc = 0
+            for(abc <- abcList) {
+                codeArray(pc) = abc
+                pc += abc.size
+            }
+        }
+
+        val UninitializedHeight : Int = Int.MinValue
+        val heightArray = Array.fill[Int](actualSize)(UninitializedHeight)
+
+        // An invocation of this function reads as "when the pc reaches `from`, the stack height should be `there`".
+        def setHeight(from: Int, there: Int): Unit = {
+            if from < 0 || from >= actualSize then
+                throw CodeFreezingException("No bytecode at pc=" + from + ". Missing instructions?", abcList)
+
+            if there < 0 then
+                throw CodeFreezingException("Negative stack height at pc=" + from + " (which is " + codeArray(from) + ").", abcList)
+
+            if (heightArray(from) != UninitializedHeight) { // If another paths led to the same pc.
+                if heightArray(from) == there then return
+                else throw CodeFreezingException("Inconsistent stack height at pc=" + from + "(" + heightArray(from) + " and " + there + ")", abcList)
+            }
+
+            val pc = from
+            heightArray(pc) = there
+
+            import ByteCode.*
+            codeArray(pc) match
+                case Raw(WIDE) => sys.error("Wide is unsupported for now.")
+                case Raw(RETURN) => if(there != 0) throw CodeFreezingException("Non-empty stack after return in void method")
+                case Raw(ATHROW) => {
+                    // Nothing really matters.
+                }
+            end match
+        }
+
+        Right(50)
     }
 
     /** "Freezes" the code: maxLocals is computed, abstract byte codes are turned
@@ -135,7 +176,7 @@ class CodeHandler (
         }
 
         // we now compute the maximum stack height.
-        code.maxStack = computeMaxStack(abcList) //Unimplemented!!
+        code.maxStack = computeMaxStack(abcList).getOrElse(50) //Unimplemented!!
 
         // finally, we dump the code.
         abcList.foreach(code.bytes << _)
@@ -158,20 +199,20 @@ end CodeHandler
 
 
 case class CodeFreezingException(
-    message : String, code : Code = Monoid[Code].empty
+    message: String, codes: Seq[AtomCode] = Nil
 ) extends Exception {
     import Code.*
 
     override def getMessage : String = {
-        if(code.isEmpty) {
+        if(codes.isEmpty) {
             message
         } else {
             val b = new StringBuilder()
             b.append(message)
             b.append("\n")
-            /*
+            
             var pc = 0
-            for(abc <- code.codes) abc match {
+            for(abc <- codes) abc match {
                 case Label(name) =>
                     b.append(name)
                     b.append(":\n")
@@ -181,7 +222,6 @@ case class CodeFreezingException(
                     b.append("\n")
                     pc += abc.size
             }
-            */
 
             b.toString
         }

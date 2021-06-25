@@ -33,11 +33,10 @@ class MethodHandler(
         ch.get
     }
 
-    def apply(src: Code): MethodInfo = 
-        code(src)
-        this.methodInfo
+    def apply(src: Code): Result[MethodInfo] = 
+        for (_ <- code(src)) yield this.methodInfo
 
-    def code(src: Code): Unit =
+    def code(src: Code): Result[CodeAttributeInfo] =
         src(this.codeHandler).freeze()
 
     def setFlags(flags: U2): Unit = {

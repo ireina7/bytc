@@ -66,48 +66,43 @@ class ClassFile(val className: String, superName: Option[String] = None) extends
     }
 
     /** Adds a method with arbitrarily many arguments, using the default flags and no attributes. */
-    def addMethod(retTpe: String, name: String, args: String*)(code: Code): Unit = 
-        addMethod(retTpe, name, args.toList)(code)
+    def addMethod(retTpe: String, name: String, args: String*)(code: Code): Result[Unit] = 
+        addMethod(defaultMethodAccessFlags, retTpe, name, args.toList)(code)
 
-    def addMethod(retTpe: String, name: String, args: List[String])(code: Code): Unit = {
+    def addMethod(accessFlags: U2, retTpe: String, name: String, args: List[String])(code: Code): Result[Unit] = {
 
-        val functionType = FunctionType(defaultMethodAccessFlags, retTpe, args*)
+        val functionType = FunctionType(accessFlags, retTpe, args*)
 
         val handler = new MethodHandler(name, functionType, codeNameIndex, constantPool)
-        val info = handler(code)
-        methods = methods ::: (info :: Nil)
+        for {
+            info <- handler(code)
+        } yield {
+            methods = methods ::: (info :: Nil)
+        }
     }
 
     /** Adds the main method */
-    def addMainMethod(code: Code): Unit = {
+    def addMainMethod(code: Code): Result[Unit] = {
         
         val accessFlags: U2 = Flag.METHOD_ACC_PUBLIC | Flag.METHOD_ACC_STATIC
-        val functionType = FunctionType(accessFlags, "V", "[Ljava/lang/String;")
-
-        val handler = new MethodHandler("main", functionType, codeNameIndex, constantPool)
-        val info = handler(code)
-        methods = methods ::: (info :: Nil)
+        addMethod(accessFlags, "V", "main", "[Ljava/lang/String;" :: Nil)(code)
     }
 
     /** Adds a constructor to the class. Constructor code should always start by invoking a constructor from the super class. */
-    def addConstructor(args : String*)(code: Code): Unit = addConstructor(args.toList)(code)
+    def addConstructor(args : String*)(code: Code): Result[Unit] = addConstructor(args.toList)(code)
 
-    def addConstructor(args : List[String])(code: Code): Unit = {
+    def addConstructor(args : List[String])(code: Code): Result[Unit] = {
 
         val accessFlags : U2 = Flag.METHOD_ACC_PUBLIC
-        val functionType = FunctionType(accessFlags, "V", args*)
-        
-        val handler = new MethodHandler(constructorName, functionType, codeNameIndex, constantPool)
-        val info = handler(code)
-        methods = methods ::: (info :: Nil)
+        addMethod(accessFlags, "V", constructorName, args)(code)
     }
 
     /** Adds a default constructor. */
-    def addDefaultConstructor: Unit = {
+    def addDefaultConstructor: Result[Unit] = {
         import ByteCode.{*, given}
         import Code.{*, given}
 
-        val mh = addConstructor(Nil) {
+        addConstructor(Nil) {
             ALOAD_0 <<
             InvokeSpecial(Path(superClassName), constructorName, "()V") <<
             RETURN

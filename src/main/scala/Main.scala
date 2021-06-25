@@ -8,7 +8,7 @@ import bytc.given
   import Code.*
   println("Hello bytc!")
 
-  val classfile = ClassFile("HW", None)
+  val classfile = ClassFile("HW")
   classfile.addDefaultConstructor
   classfile.addMainMethod(helloWorld)
   classfile.addMethod("I", "fact", "I")(fact << PrintCode)

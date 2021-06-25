@@ -9,14 +9,14 @@ import bytc.Type.FunctionType
 
 class CodeHandler (
     c: CodeAttributeInfo, 
-    cp: ConstantPool, 
-    functionType: FunctionType,
+    val constantPool: ConstantPool, 
+    val functionType: FunctionType,
 ):
     import Type.*
     import Code.*
 
     private val code: CodeAttributeInfo = c
-    val constantPool: ConstantPool = cp
+    //val constantPool: ConstantPool = cp
     private val abcBuffer : ListBuffer[AtomCode] = ListBuffer.empty
     private var frozen : Boolean = false
     private def append(abc: AtomCode): Unit = if !frozen then abcBuffer += abc
@@ -71,6 +71,10 @@ class CodeHandler (
     }
 
 
+    inline def error[A](inline msg: String): Result[A] = {
+        Left(new BytcError(msg))
+    }
+
     def computeMaxStack(abcList : List[AtomCode]) : U2 = {
         assert(frozen)
         50
@@ -78,8 +82,8 @@ class CodeHandler (
 
     /** "Freezes" the code: maxLocals is computed, abstract byte codes are turned
     *  into concrete ones. This includes computation of the label offsets. */
-    def freeze(): Unit = if(frozen) {
-        throw CodeFreezingException(
+    def freeze(): Result[CodeAttributeInfo] = if(frozen) {
+        error(
         "Cannot invoke `freeze` twice on the same CodeHandler.")
     } else {
         frozen = true
@@ -135,6 +139,7 @@ class CodeHandler (
 
         // finally, we dump the code.
         abcList.foreach(code.bytes << _)
+        Right(code)
     }
 
 

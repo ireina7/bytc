@@ -2,6 +2,7 @@ package bytc
 
 import scala.language.implicitConversions
 import cats.data.State
+import bytc.ClassFile.Operation
 
 
 class ClassFile(val className: String, superName: Option[String] = None) extends Streamable {
@@ -132,3 +133,47 @@ class ClassFile(val className: String, superName: Option[String] = None) extends
         byteStream.writeToFile(fileName)
     }
 }
+
+
+
+object ClassFile:
+    import cats.data.State
+
+    class Operation(val state: State[ClassFile, Result[ClassFile]]):
+        def <<(next: Operation) = new Operation(this.state.flatMap(_ => next.state))
+        def run(cf: ClassFile): Result[ClassFile] = this.state.run(cf).value._2
+        def create(): Result[ClassFile] = this.run(new ClassFile("Null"))
+
+    object Operation:
+
+        inline def newState[S, A](f: S => (S, A)): State[S, A] = State[S, A](f)
+        //inline def modify[S, A](f: S => Result[])
+
+        case class Define(name: String) extends Operation(newState { cf =>
+            val newCf = new ClassFile(name)
+            (newCf, Right(newCf))
+        })
+
+        case class Main(code: Code) extends Operation(newState { cf =>
+            val res = for(_ <- cf.addMainMethod(code)) yield cf
+            (cf, res)
+        })
+
+        case class Constructor(args: String*)(code: Code) extends Operation(newState { cf =>
+            val res = for(_ <- cf.addConstructor(args*)(code)) yield cf
+            (cf, res)
+        })
+
+        case object DefaultConstructor extends Operation(newState { cf =>
+            val res = for(_ <- cf.addDefaultConstructor) yield cf
+            (cf, res)
+        })
+
+        case class Method(retTpe: String, name: String, args: String*)(code: Code) extends Operation(newState { cf =>
+            val res = for(_ <- cf.addMethod(retTpe, name, args*)(code)) yield cf
+            (cf, res)
+        })
+
+    end Operation
+
+end ClassFile

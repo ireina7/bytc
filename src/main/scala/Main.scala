@@ -7,13 +7,19 @@ import bytc.given
 @main def main: Unit = 
   import Code.*
   println("Hello bytc!")
+  
 
-  val classfile = ClassFile("HW")
-  classfile.addDefaultConstructor
-  classfile.addMainMethod(helloWorld)
-  classfile.addMethod("I", "fact", "I")(fact << PrintCode)
+  import ClassFile.Operation.*
+  val `class` = 
+    Define("HelloWorld")
+      << DefaultConstructor
+      << Main(helloWorld)
+      << Method("I", "fact", "I")(fact << PrintCode)
 
-  classfile.writeToFile("HW.class")
+  `class`.create() match
+    case Left(err) => sys.error(err.msg)
+    case Right(cf) => cf.writeToFile("HelloWorld.class")
+  
 
 end main
 

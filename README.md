@@ -12,7 +12,7 @@ Purely functional byte code and class file generator written in Scala3
 
 
 ## Designs
-- The core class `Code` is purely composable (all functions), which implements `Monoid`.
+- The core class `Code` and `ClassFile.Operation` are purely composable (all functions), which implement `Monoid`.
 - No side effect until we have to write file (IO).
 
 ## Usage
@@ -29,6 +29,13 @@ Purely functional byte code and class file generator written in Scala3
 - `InvokeVirtual` invoke methods
 - ...
 
+### Useful classfile operations
+- `Define` defines a new class
+- `Main` adds main method
+- `Method` adds method
+- `Constructor` adds constructor
+- `DefaultConstructor` adds default constructor
+
 
 ## Examples
 
@@ -44,10 +51,15 @@ import Type.*
 @main def main: Unit = 
   import Code.*
 
-  val classfile = ClassFile("HelloWorld", None)
-  classfile.addDefaultConstructor
-  classfile.addMainMethod(helloWorld << PrintCode) // Add `PrintCode` to debug
-  classfile.writeToFile("HelloWorld.class")
+  import ClassFile.Operation.*
+  val `class` = 
+    Define("HelloWorld")
+      << DefaultConstructor
+      << Main(helloWorld)
+
+  `class`.create() match
+    case Left(err) => sys.error(err.msg)
+    case Right(cf) => cf.writeToFile("HelloWorld.class")
 end main
 
 def helloWorld: Code = {

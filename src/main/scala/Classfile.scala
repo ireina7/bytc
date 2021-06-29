@@ -6,8 +6,9 @@ import bytc.ClassFile.Operation
 
 
 class ClassFile(val className: String, superName: Option[String] = None) extends Streamable {
-    import Type._
-    import Defaults._
+    import Type.*
+    import Defaults.*
+    
 
     val magic: U4 = defaultMagic
     val version = Version(defaultMajor, defaultMinor)

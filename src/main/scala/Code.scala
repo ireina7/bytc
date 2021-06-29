@@ -1,7 +1,7 @@
 package bytc
 
 import scala.language.implicitConversions
-import Type._
+import Type.*
 import scala.collection.mutable
 import mutable.ListBuffer
 import cats.Monoid
@@ -12,6 +12,88 @@ import cats.data.State
 import cats.syntax.monoid.*
 import cats.syntax.traverse.*
 import cats.syntax.monad.*
+
+
+
+/**
+ * Code Geass!
+ * Abstract Module of Code
+*/
+trait Geass[Code](using monoid: Monoid[Code]):
+    import ByteCode.*
+    import AtomCode.*
+
+    extension (code: Code) def <<(other: Code): Code = code |+| other
+
+    def define(name: String)(codes: Seq[Code]): Code =
+        codes.foldLeft[Code](comment(s"Define $name"))((acc, code) => acc << code)
+
+    def atom(atomCode: AtomCode): Code
+    def byte(byteCode: ByteCode): Code
+
+    given Conversion[AtomCode, Code] = atom
+    given Conversion[ByteCode, Code] = byte
+
+    def pass: Code = monoid.empty
+    def comment(s: String) = pass
+
+    // load value
+    trait Loadable[A]:
+        extension (a: A) def load: Code
+    def load[A: Loadable](x: A): Code = x.load
+
+    // store value
+    def store(x: Var): Code
+
+    // Instance creation
+    def `new`(className: Path): Code
+    def defaultNew(className: Path): Code = `new`(className)
+        << DUP
+        << invokeSpecial(className, "<init>", "()V")
+
+    // return
+    def `return`: Code
+
+    // Gets and Puts
+    protected def accessField
+        (bc: ByteCode, className: String, fieldName: String, fieldType: String): Code
+
+    def getField(className: Path, fieldName: String, fieldType: String) = 
+        accessField(GETFIELD,  className.src, fieldName, fieldType)
+    def getStatic(className: Path, fieldName: String, fieldType: String) = 
+        accessField(GETSTATIC, className.src, fieldName, fieldType)
+    def putField(className: Path, fieldName: String, fieldType: String) = 
+        accessField(PUTFIELD,  className.src, fieldName, fieldType)
+    def putStatic(className: Path, fieldName: String, fieldType: String) = 
+        accessField(PUTSTATIC, className.src, fieldName, fieldType)
+
+
+    // Invoke
+    protected def invokeMethod
+        (bc: ByteCode, className: String, methodName: String, methodSig: String): Code
+    
+    def invokeSpecial(className: Path, methodName: String, methodSig: String): Code = 
+        invokeMethod(INVOKESPECIAL, className.src, methodName, methodSig)
+    def InvokeStatic(className: Path, methodName: String, methodSig: String): Code =
+        invokeMethod(INVOKESTATIC, className.src, methodName, methodSig)
+    def InvokeVirtual(className: Path, methodName: String, methodSig: String): Code =
+        invokeMethod(INVOKEVIRTUAL, className.src, methodName, methodSig)
+    def InvokeInterface(className: Path, methodName: String, methodSig: String): Code = 
+        invokeMethod(INVOKEINTERFACE, className.src, methodName, methodSig)
+            << RawByte(methodSignatureArgStackEffect(methodSig) + 1)
+            << RawByte(0)
+            
+end Geass
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -31,9 +113,11 @@ given Monoid[Code] with
 
 
 
+
+
+
 given Conversion[AtomCode, Code] with
     def apply(atom: AtomCode): Code = new Code(State.modify(_ << atom))
-
 
 trait AtomCode(val size: Int)
 

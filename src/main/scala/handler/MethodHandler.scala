@@ -24,7 +24,6 @@ class MethodHandler(
     val functionSig = constantPool.functionTypeToSignature(name, functionType)
 
     val codeInfo = new CodeAttributeInfo(codeIndex)
-    val methodInfo = new MethodInfo(functionSig, List(codeInfo))
 
     def codeHandler : CodeHandler = {
         if ch.isEmpty then 
@@ -34,11 +33,12 @@ class MethodHandler(
     }
 
     def apply(src: Code): Result[MethodInfo] = 
-        for (_ <- code(src)) yield this.methodInfo
+        for (codeInfo <- code(src)) yield new MethodInfo(functionSig, List(codeInfo))
 
     def code(src: Code): Result[CodeAttributeInfo] =
         src(this.codeHandler).freeze()
 
+    /*
     def setFlags(flags: U2): Unit = {
         if ch.isDefined then 
             if methodInfo.isStatic != ((flags & Flag.METHOD_ACC_STATIC) != 0) then
@@ -46,5 +46,6 @@ class MethodHandler(
 
         methodInfo.accessFlags = flags
     }
+    */
 
 }

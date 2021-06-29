@@ -1,8 +1,8 @@
 // The main entry of bytc
 import scala.language.implicitConversions
 import bytc.*
-import bytc.Type.*
 import bytc.given
+import bytc.Type.*
 
 @main def main: Unit = 
   import Code.*
@@ -10,14 +10,14 @@ import bytc.given
   
   import ClassFile.Operation.*
   val `class` = 
-    Define("HelloWorld")
+    Define("HW")
       << DefaultConstructor
       << Main(helloWorld)
       << Method("I", "fact", "I")(fact << PrintCode)
 
   `class`.create() match
     case Left(err) => sys.error(err.msg)
-    case Right(cf) => cf.writeToFile("HelloWorld.class")
+    case Right(cf) => cf.writeToFile("HW.class")
   
 
 end main
@@ -26,9 +26,6 @@ end main
 
 def helloWorld: Code = {
   import Code.*
-  
-
-  val cs = RawByte(1) << ALOAD_0 << ALoad(7) << RETURN
 
   val invokeFact = 
     Comment("Invoking fact(5)")

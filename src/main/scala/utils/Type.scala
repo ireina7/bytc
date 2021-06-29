@@ -19,7 +19,7 @@ object Type {
         def apply(id: Int) = new Var(id)
 
 
-    case class Version(major: Int, minor: Int)
+    case class Version(major: U2, minor: U2)
     case class Path(src: String)
 
     case class FunctionSignature(accessFlags: U2, descriptorIndex: U2, nameIndex: U2)

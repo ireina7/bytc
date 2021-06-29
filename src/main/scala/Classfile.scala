@@ -9,9 +9,8 @@ class ClassFile(val className: String, superName: Option[String] = None) extends
     import Type._
     import Defaults._
 
-    private val magic: U4 = defaultMagic
-    private val minor: U2 = defaultMinor
-    private val major: U2 = defaultMajor
+    val magic: U4 = defaultMagic
+    val version = Version(defaultMajor, defaultMinor)
 
     private var constantPool = new ConstantPool()
     lazy val codeNameIndex: U2 = constantPool.addString("Code") // Never change this since JVM defines this
@@ -113,8 +112,8 @@ class ClassFile(val className: String, superName: Option[String] = None) extends
 
     override def stream = State.modify { _
         << magic
-        << minor
-        << major
+        << version.minor
+        << version.major
         << constantPool
         << accessFlags
         << thisClass

@@ -12,8 +12,11 @@ Purely functional byte code and class file generator written in Scala3
 
 
 ## Designs
-- The core class `Code` and `ClassFile.Operation` are purely composable (all functions), which implement `Monoid`.
+- The core class `Code` and `ClassFile.Operation` are purely composable, which implement `Monoid`.
 - No side effect until we have to write file (IO).
+- Computation description and interpreter implementation properly seperated
+  (Free monad is not necessary with Scala's implicits).
+
 
 ## Usage
 
@@ -35,6 +38,7 @@ Purely functional byte code and class file generator written in Scala3
 - `Method` adds method
 - `Constructor` adds constructor
 - `DefaultConstructor` adds default constructor
+- ...
 
 
 ## Examples
@@ -92,7 +96,7 @@ def fact: Code = {
     << Load(Var(1)) 
     << Load(1) 
     << ISUB 
-    << InvokeVirtual("HW", "fact", "(I)I")
+    << InvokeVirtual("HelloWorld", "fact", "(I)I")
     << IMUL 
     << Return
 }

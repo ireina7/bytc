@@ -8,6 +8,7 @@ import cats.syntax.functor.*
 import cats.syntax.applicative.*
 
 
+infix type isStreamableUnder[A, F[_]] = ToStream[F, A]
 trait ToStream[F[_], A]:
   extension (a: A) def toStream: F[Unit]
 

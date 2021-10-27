@@ -10,7 +10,42 @@ import cats.syntax.functor.*
 import cats.syntax.applicative.*
 
 
-trait JVMClass[F[_]: Monad, 
+
+/**
+ * The top of all Class File abstractions
+*/
+trait IsJVMClass[F[_]: Functor,
+  JVMClass,
+  Code: Geass,
+  MethodInfo,
+  FieldInfo,
+  InterfaceInfo,
+  AttributeInfo,
+  ConstantPool,
+]:
+  import Type.*
+  import Defaults.*
+
+  extension (jvmClass: JVMClass)
+    def magic    : F[U4]
+    def version  : F[Version]
+    def className: F[String]
+    def superName: F[Option[String]]
+    def superClassName: F[String] = superName.map(_.getOrElse(defaultSuperClass))
+
+    def thisClass   : F[U2]
+    def superClass  : F[U2]
+    def flags       : F[U2]
+    def constantPool: F[ConstantPool]
+    def methods     : F[List[MethodInfo   ]]
+    def fields      : F[List[FieldInfo    ]]
+    def interfaces  : F[List[InterfaceInfo]]
+    def attributes  : F[List[AttributeInfo]]
+
+end IsJVMClass
+
+
+trait JVMClass[F[_],
   Code: Geass,
   MethodInfo,
   FieldInfo,
@@ -38,6 +73,8 @@ trait JVMClass[F[_]: Monad,
 
 end JVMClass
 
+// given []
+
 
 abstract class JVMClassFile[F[_]: Monad, 
   Code: Geass,
@@ -46,15 +83,15 @@ abstract class JVMClassFile[F[_]: Monad,
   InterfaceInfo,
   AttributeInfo,
   ConstantPool,
-] (using 
-  ev0: ToStream[F, U2],
-  ev1: ToStream[F, U4],
-  ev2: ToStream[F, MethodInfo],
-  ev3: ToStream[F, FieldInfo],
-  ev4: ToStream[F, InterfaceInfo],
-  ev5: ToStream[F, AttributeInfo],
-  ev6: ToStream[F, ConstantPool],
-  ev7: Monoid[F[Unit]],
+](using 
+  ToStream[F, U2],
+  ToStream[F, U4],
+  ToStream[F, MethodInfo],
+  ToStream[F, FieldInfo],
+  ToStream[F, InterfaceInfo],
+  ToStream[F, AttributeInfo],
+  ToStream[F, ConstantPool],
+  Monoid[F[Unit]],
 ) extends 
   JVMClass[F, 
     Code, 
@@ -219,7 +256,7 @@ class ClassFile(
   // }
 
   /** Writes the binary representation of this class file to a file. */
-  def writeToFile(fileName : String) = {
+  def writeToFile(fileName: String = s"$className.class") = {
     // The stream we'll ultimately use to write the class file data
     val byteStream = new ByteStream
     byteStream << this

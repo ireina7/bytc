@@ -13,7 +13,7 @@ import bytc.Type.given
   
   classFile.create() match
     case Left(err) => sys.error(err.msg)
-    case Right(cf) => cf.writeToFile("HW.class")
+    case Right(cf) => cf.writeToFile()
   
 end main
 

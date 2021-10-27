@@ -24,5 +24,4 @@ end Tool
 /**
  * Default tool implicit conversions inside `bytc` package
 */
-given Conversion[String, Path] with 
-  def apply(s: String) = Path(Tool.transformPath(s))
+

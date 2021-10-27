@@ -4,7 +4,7 @@ package bytc
 import Type._
 import cats.data.State
 
-class ConstantPool extends Streamable {
+class ConstantPool extends ByteStreamable {
     import scala.collection.mutable.HashMap
     type Index = U2
 
@@ -202,7 +202,7 @@ object CPTags {
     val Utf8: U1               =  1
 }
 
-sealed abstract class CPEntry(val tag: U1) extends Streamable
+sealed abstract class CPEntry(val tag: U1) extends ByteStreamable
 
 case class CPClassInfo(val nameIndex: U2) extends CPEntry(CPTags.Class) {
     override def stream: State[ByteStream, Unit] = State.modify { stream =>

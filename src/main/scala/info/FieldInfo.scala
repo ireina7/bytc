@@ -8,7 +8,7 @@ case class FieldInfo(
     nameIndex: U2, 
     descriptorIndex: U2, 
     attributes: Seq[AttributeInfo]
-) extends Streamable {
+) extends ByteStreamable {
     
     override def stream = State.modify { stream =>
         stream << accessFlags << nameIndex << descriptorIndex

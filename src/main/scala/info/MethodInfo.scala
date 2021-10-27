@@ -7,7 +7,7 @@ import cats.data.State
 case class MethodInfo (
     signature: FunctionSignature,
     attributes: Seq[AttributeInfo]
-) extends Streamable {
+) extends ByteStreamable {
 
     var accessFlags: U2 = signature.accessFlags
     val nameIndex: U2 = signature.nameIndex

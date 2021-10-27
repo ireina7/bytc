@@ -3,46 +3,56 @@ import scala.language.implicitConversions
 import bytc.*
 import bytc.given
 import bytc.Type.*
+import bytc.Type.given
 
 @main def main: Unit = 
-  import Code.*
-  println("Hello bytc!")
   
-  import ClassFile.Operation.*
-  val `class` = 
-    Define("HW")
-      << DefaultConstructor
-      << Main(helloWorld)
-      << Method("I", "fact", "I")(fact << PrintCode)
-
-  `class`.create() match
+  println("Hello bytc!\n")
+  // val tt = JVMType.from[Int]
+  // println(tt)
+  
+  classFile.create() match
     case Left(err) => sys.error(err.msg)
     case Right(cf) => cf.writeToFile("HW.class")
   
-
 end main
 
 
 
+
+def classFile = {
+  import Code.*
+  import ClassFile.Operation.{
+    Define => DefineClass,
+    *
+  }
+
+  DefineClass("HW")
+    << DefaultConstructor
+    << Main(helloWorld)
+    << Method("I", "fact", "I")(fact << PrintCode)
+}
+
+
 def helloWorld: Code = {
   import Code.*
-
+  
   val invokeFact = 
     Comment("Invoking fact(5)")
       << DefaultNew("HW")
-      << Load(5)
-      << InvokeVirtual("HW", "fact", "(I)I")
+      << load(5)
+      << invokeVirtual("HW", "fact", "(I)I")
   
   val printStream = 
     GetStatic("java.lang.System", "out", "Ljava/io/PrintStream;")
   
   Comment("Hello world example")
     << printStream
-    << Load("Hello world!")
-    << InvokeVirtual("java.io.PrintStream", "println", "(Ljava/lang/String;)V")
+    << load("Hello world!")
+    << invokeVirtual("java.io.PrintStream", "println", "(Ljava/lang/String;)V")
     << printStream
     << invokeFact
-    << InvokeVirtual("java.io.PrintStream", "println", "(I)V")
+    << invokeVirtual("java.io.PrintStream", "println", "(I)V")
     << Return
 }
 

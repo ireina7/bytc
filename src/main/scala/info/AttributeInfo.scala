@@ -12,7 +12,7 @@ object AttributeInfo {
         if(ai == null) None else Some((ai.attributeNameIndex, ai.info))
 }
 
-class AttributeInfo(val attributeNameIndex: U2, val info: Seq[U1]) extends Streamable {
+class AttributeInfo(val attributeNameIndex: U2, val info: Seq[U1]) extends ByteStreamable {
     override def stream = State.modify { stream =>
         stream << attributeNameIndex
         stream << info.size.asInstanceOf[U4]
@@ -37,7 +37,7 @@ class CodeAttributeInfo(val codeNameIndex: U2) extends AttributeInfo(codeNameInd
     var maxLocals: U2 = 0 // gets set when the code handler 'freezes'
     var bytes: ByteStream = new ByteStream
 
-    case class ExceptionTableEntry(startPC: U2, endPC: U2, handlerPC: U2, catchType: U2) extends Streamable {
+    case class ExceptionTableEntry(startPC: U2, endPC: U2, handlerPC: U2, catchType: U2) extends ByteStreamable {
         override def stream = State.pure(())
     }
     var exceptionTable: Seq[ExceptionTableEntry] = Nil

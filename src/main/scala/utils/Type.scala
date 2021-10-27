@@ -1,6 +1,24 @@
 package bytc
 
 import scala.language.implicitConversions
+import bytc.Type.JVMType
+
+
+
+/**
+ * Useful trait to convert type A to T like `Rust`'s  `From`
+*/
+trait From[A, B]:
+    def from(a: A): B
+
+trait Into[A, B]:
+    extension (a: A) def into[B]: B
+
+
+trait FromType[B]:
+    inline def from[A]: B
+
+
 
 
 object Type {
@@ -26,8 +44,68 @@ object Type {
     case class FunctionType(accessFlags: U2, retType: String, paramType: String*)
 
 
+    given Conversion[String, Path] with 
+      inline def apply(s: String) = Path(Tool.transformPath(s))
+
+    /**
+     * All JVM supported types
+    */
+    enum JVMType(description: String):
+        case I extends JVMType("Int")
+        case S extends JVMType("Short")
+        case J extends JVMType("Long")
+        case C extends JVMType("Char")
+        case F extends JVMType("Float")
+        case D extends JVMType("Double")
+        case Z extends JVMType("Bool") // fake Int
+        case V extends JVMType("Void")
+        case Arr(elemType: JVMType) extends JVMType(s"[$elemType]")
+        case Obj extends JVMType("Object")
+        case Function(ps: Seq[JVMType], retType: JVMType)
+            extends JVMType(s"${ps.mkString("(", ", ", ")")}=>${retType}")
+        
+    end JVMType
+
+    
+    given FromType[JVMType] with
+        override inline def from[T]: JVMType = {
+            import scala.compiletime.erasedValue
+            import JVMType.{from as _, *}
+
+            inline erasedValue[T] match
+                case _: Int       => I
+                case _: Short     => S
+                case _: Long      => J
+                case _: Char      => C
+                case _: Float     => F
+                case _: Double    => D
+                case _: Boolean   => Z
+                case _: Unit      => V
+                case _: Array[e]  => Arr(from[e])
+                case _: (ps => t) => Obj
+                case _: Any       => Obj
+        }
+        
+
+    object JVMType extends FromType[JVMType]:
+        override inline def from[T]: JVMType = summon[FromType[JVMType]].from[T]
+        def from(s: String) = s match
+            case "Int"    => I
+            case "Short"  => S
+            case "Long"   => J
+            case "Char"   => C
+            case "Float"  => F
+            case "Double" => D
+            case "Bool"   => Z
+            case "Void"   => V
+            case _        => Obj
+    end JVMType
+
+
+
     /** Converts a string representing multiple JVM types into a sequence of
-     * integers representing their respective sizes in bytes. */
+     * integers representing their respective sizes in bytes. 
+     * */
     def typesToByteCounts(types : String) : Seq[Int] = {
         var s : String = types
         var lst : List[Int] = Nil
@@ -41,7 +119,8 @@ object Type {
 
     /** Used to compute for instance the stack effect of method invocations or
         * the number of slots required by for method arguments. In reality, a hackish
-        * parser. */
+        * parser. 
+        * */
     def typesToByteCount(types : String) : Int = {
         var s : String = types
         var c : Int = 0

@@ -15,76 +15,119 @@ import cats.syntax.monad.*
 
 
 
+
+
+
+trait JVMCode[Code]:
+
+  def pass: Code
+
+  trait Loadable[A]:
+    extension (a: A) def load: Code
+  def load[A: Loadable](x: A): Code = x.load
+
+  def store(x: Var): Code
+
+  def `new`(path: Path): Code
+  def defaultNew(path: Path): Code
+  def newArray(arrayType: String): Code
+  def newArray(tpe: Int): Code
+  
+  def `return`: Code
+  
+  def invokeVirtual  (path: Path, method: String, sig: String): Code
+  def invokeStatic   (path: Path, method: String, sig: String): Code
+  def invokeSpecial  (path: Path, method: String, sig: String): Code
+  def invokeInterface(path: Path, method: String, sig: String): Code
+  
+  def getField (path: Path, field: String, fieldType: String): Code
+  def getStatic(path: Path, field: String, fieldType: String): Code
+  def putField (path: Path, field: String, fieldType: String): Code
+  def putStatic(path: Path, field: String, fieldType: String): Code
+  
+  def classOf   (path: Path): Code
+  def instanceOf(path: Path): Code
+  def checkCast (path: Path): Code
+
+end JVMCode
+
+
+
 /**
- * Code Geass!
+ * Code Geass!  
  * Abstract Module of Code
 */
-trait Geass[Code](using monoid: Monoid[Code]):
-    import ByteCode.*
-    import AtomCode.*
+trait Geass[Code](using monoid: Monoid[Code]) extends JVMCode[Code]:
+  import AtomCode.*
 
-    extension (code: Code) def <<(other: Code): Code = code |+| other
+  extension (code: Code) def <<(other: Code): Code = code |+| other
+  
+  def define(name: String)(codes: Seq[Code]): Code =
+    codes.foldLeft(comment(s"Define $name"))(_ << _)
 
-    def define(name: String)(codes: Seq[Code]): Code =
-        codes.foldLeft[Code](comment(s"Define $name"))((acc, code) => acc << code)
+  def atom(atomCode: AtomCode): Code
+  def byte(byteCode: ByteCode): Code
 
-    def atom(atomCode: AtomCode): Code
-    def byte(byteCode: ByteCode): Code
+  given Conversion[AtomCode, Code] = atom
+  given Conversion[ByteCode, Code] = byte
 
-    given Conversion[AtomCode, Code] = atom
-    given Conversion[ByteCode, Code] = byte
+  def pass: Code = monoid.empty
+  def comment(s: String) = pass
+  
 
-    def pass: Code = monoid.empty
-    def comment(s: String) = pass
+  // Gets and Puts
+  protected def accessField
+    (bc: ByteCode, className: String, fieldName: String, fieldType: String): Code
 
-    // load value
-    trait Loadable[A]:
-        extension (a: A) def load: Code
-    def load[A: Loadable](x: A): Code = x.load
-
-    // store value
-    def store(x: Var): Code
-
-    // Instance creation
-    def `new`(className: Path): Code
-    def defaultNew(className: Path): Code = `new`(className)
-        << DUP
-        << invokeSpecial(className, "<init>", "()V")
-
-    // return
-    def `return`: Code
-
-    // Gets and Puts
-    protected def accessField
-        (bc: ByteCode, className: String, fieldName: String, fieldType: String): Code
-
-    def getField(className: Path, fieldName: String, fieldType: String) = 
-        accessField(GETFIELD,  className.src, fieldName, fieldType)
-    def getStatic(className: Path, fieldName: String, fieldType: String) = 
-        accessField(GETSTATIC, className.src, fieldName, fieldType)
-    def putField(className: Path, fieldName: String, fieldType: String) = 
-        accessField(PUTFIELD,  className.src, fieldName, fieldType)
-    def putStatic(className: Path, fieldName: String, fieldType: String) = 
-        accessField(PUTSTATIC, className.src, fieldName, fieldType)
+  def getField(path: Path, field: String, fieldType: String) = 
+    accessField(GETFIELD,  path.src, field, fieldType)
+  def getStatic(path: Path, field: String, fieldType: String) = 
+    accessField(GETSTATIC, path.src, field, fieldType)
+  def putField(path: Path, field: String, fieldType: String) = 
+    accessField(PUTFIELD,  path.src, field, fieldType)
+  def putStatic(path: Path, field: String, fieldType: String) = 
+    accessField(PUTSTATIC, path.src, field, fieldType)
 
 
-    // Invoke
-    protected def invokeMethod
-        (bc: ByteCode, className: String, methodName: String, methodSig: String): Code
-    
-    def invokeSpecial(className: Path, methodName: String, methodSig: String): Code = 
-        invokeMethod(INVOKESPECIAL, className.src, methodName, methodSig)
-    def InvokeStatic(className: Path, methodName: String, methodSig: String): Code =
-        invokeMethod(INVOKESTATIC, className.src, methodName, methodSig)
-    def InvokeVirtual(className: Path, methodName: String, methodSig: String): Code =
-        invokeMethod(INVOKEVIRTUAL, className.src, methodName, methodSig)
-    def InvokeInterface(className: Path, methodName: String, methodSig: String): Code = 
-        invokeMethod(INVOKEINTERFACE, className.src, methodName, methodSig)
-            << RawByte(methodSignatureArgStackEffect(methodSig) + 1)
-            << RawByte(0)
-            
+  // Invoke
+  protected def invokeMethod
+    (bc: ByteCode, className: String, methodName: String, methodSig: String): Code
+  
+  def invokeSpecial(path: Path, methodName: String, methodSig: String): Code = 
+    invokeMethod(INVOKESPECIAL, path.src, methodName, methodSig)
+  def invokeStatic(path: Path, methodName: String, methodSig: String): Code =
+    invokeMethod(INVOKESTATIC, path.src, methodName, methodSig)
+  def invokeVirtual(path: Path, methodName: String, methodSig: String): Code =
+    invokeMethod(INVOKEVIRTUAL, path.src, methodName, methodSig)
+  def invokeInterface(path: Path, methodName: String, methodSig: String): Code = 
+    invokeMethod(INVOKEINTERFACE, path.src, methodName, methodSig)
+      << RawByte(methodSignatureArgStackEffect(methodSig) + 1)
+      << RawByte(0)
 end Geass
 
+trait GeassUpperCase[Code] extends Geass[Code]:
+  val Define = define
+  val Comment = comment
+  val Pass = pass
+  def Load[A: Loadable](x: A): Code = load(x)
+  //val x: [A] => A => Loadable[A] ?=> Code = load
+  val Store = store
+  val New = `new`
+  val DefaultNew = defaultNew
+  val InstanceOf = instanceOf
+  val CheckCast = checkCast
+  val Return = `return`
+
+  val InvokeVirtual   = invokeVirtual
+  val InvokeStatic    = invokeStatic
+  val InvokeSpecial   = invokeSpecial
+  val InvokeInterface = invokeInterface
+  
+  val GetField  = getField
+  val GetStatic = getStatic
+  val PutField  = getField
+  val PutStatic = getStatic
+end GeassUpperCase
 
 
 
@@ -96,20 +139,21 @@ end Geass
 
 
 
-
-
+/**
+ * Data type of Code
+*/
 class Code(val state: State[CodeHandler, Unit]):
-    val size: Int = 0
-    def isEmpty: Boolean = size == 0
-    def run(ch: CodeHandler) = state.run(ch).value
-    def runS(ch: CodeHandler) = state.runS(ch).value
-    def apply(ch: CodeHandler) = runS(ch)
-    def <<(other: Code) = this |+| other
+  val size: Int = 0
+  def isEmpty: Boolean = size == 0
+  def run(ch: CodeHandler) = state.run(ch).value
+  def runS(ch: CodeHandler) = state.runS(ch).value
+  def apply(ch: CodeHandler) = runS(ch)
+  def <<(other: Code) = this |+| other
 end Code
 
 given Monoid[Code] with
-    def empty = new Code(State.pure(()))
-    def combine(x: Code, y: Code) = new Code(x.state.flatMap(_ => y.state))
+  def empty = new Code(State.pure(()))
+  def combine(x: Code, y: Code) = new Code(x.state.flatMap(_ => y.state))
 
 
 
@@ -117,364 +161,390 @@ given Monoid[Code] with
 
 
 given Conversion[AtomCode, Code] with
-    def apply(atom: AtomCode): Code = new Code(State.modify(_ << atom))
+  def apply(atom: AtomCode): Code = new Code(State.modify(_ << atom))
 
 trait AtomCode(val size: Int)
 
 object AtomCode:
-    import ByteCode.*
+  export ByteCode.*
 
-    case object Empty extends AtomCode(0)
-    case class Raw(byteCode: ByteCode) extends AtomCode(1) {
-        override def toString = byteCode.toString
-    }
-    case class LineNumber(line : Int) extends AtomCode(0)
-    case class Label(id: String) extends AtomCode(0)
-    case class RawByte(u1: U1) extends AtomCode(1)
-    case class RawBytes(u2: U2) extends AtomCode(2)
-    class Control(val op: ByteCode, val goal: String) extends AtomCode(3) {
-        var offset: Int = 0
-    }
-    case class Goto(override val goal: String) extends Control(GOTO, goal)
-    case class IfEq(override val goal: String) extends Control(IFEQ, goal)
-    case class IfNe(override val goal: String) extends Control(IFNE, goal)
-    case class IfLt(override val goal: String) extends Control(IFLT, goal)
-    case class IfLe(override val goal: String) extends Control(IFLE, goal)
-    case class IfGt(override val goal: String) extends Control(IFGT, goal)
-    case class IfGe(override val goal: String) extends Control(IFGE, goal)
-    case class IfNull(override val goal: String) extends Control(IFNULL, goal)
-    case class IfNonNull(override val goal: String) extends Control(IFNONNULL, goal)
-    case class If_ICmpEq(override val goal: String) extends Control(IF_ICMPEQ, goal)
-    case class If_ICmpNe(override val goal: String) extends Control(IF_ICMPNE, goal)
-    case class If_ICmpLt(override val goal: String) extends Control(IF_ICMPLT, goal)
-    case class If_ICmpLe(override val goal: String) extends Control(IF_ICMPLE, goal)
-    case class If_ICmpGt(override val goal: String) extends Control(IF_ICMPGT, goal)
-    case class If_ICmpGe(override val goal: String) extends Control(IF_ICMPGE, goal)
-    case class If_ACmpEq(override val goal: String) extends Control(IF_ACMPEQ, goal)
-    case class If_ACmpNe(override val goal: String) extends Control(IF_ACMPNE, goal)
+  given Conversion[ByteCode, AtomCode] = Raw(_)
+
+  case object Empty extends AtomCode(0)
+  case class Raw(byteCode: ByteCode) extends AtomCode(1) {
+    override def toString = byteCode.toString
+  }
+  case class LineNumber(line : Int) extends AtomCode(0)
+  case class Label(id: String) extends AtomCode(0)
+  case class RawByte(u1: U1) extends AtomCode(1)
+  case class RawBytes(u2: U2) extends AtomCode(2)
+  class Control(val op: ByteCode, val goal: String) extends AtomCode(3) {
+    var offset: Int = 0
+  }
+  case class Goto(override val goal: String) extends Control(GOTO, goal)
+  case class IfEq(override val goal: String) extends Control(IFEQ, goal)
+  case class IfNe(override val goal: String) extends Control(IFNE, goal)
+  case class IfLt(override val goal: String) extends Control(IFLT, goal)
+  case class IfLe(override val goal: String) extends Control(IFLE, goal)
+  case class IfGt(override val goal: String) extends Control(IFGT, goal)
+  case class IfGe(override val goal: String) extends Control(IFGE, goal)
+  case class IfNull(override val goal: String) extends Control(IFNULL, goal)
+  case class IfNonNull(override val goal: String) extends Control(IFNONNULL, goal)
+  case class If_ICmpEq(override val goal: String) extends Control(IF_ICMPEQ, goal)
+  case class If_ICmpNe(override val goal: String) extends Control(IF_ICMPNE, goal)
+  case class If_ICmpLt(override val goal: String) extends Control(IF_ICMPLT, goal)
+  case class If_ICmpLe(override val goal: String) extends Control(IF_ICMPLE, goal)
+  case class If_ICmpGt(override val goal: String) extends Control(IF_ICMPGT, goal)
+  case class If_ICmpGe(override val goal: String) extends Control(IF_ICMPGE, goal)
+  case class If_ACmpEq(override val goal: String) extends Control(IF_ACMPEQ, goal)
+  case class If_ACmpNe(override val goal: String) extends Control(IF_ACMPNE, goal)
 
 end AtomCode
 
 
-given ToStream[AtomCode] with
-    extension (atomCode: AtomCode) def toStream =
-        import AtomCode.*
-        atomCode match
-            case Raw(byteCode) => State.modify(_ << byteCode.code)
-            case RawByte(b) => State.modify(_ << b)
-            case RawBytes(bs) => State.modify(_ << bs)
-            case ctl: Control => State.modify { bs =>
-                if ctl.offset > 65536 || ctl.offset < -32768 then
-                    sys.error("Unsupported long jump." + this)
-                else
-                    bs << ctl.op << ctl.offset.asInstanceOf[U2]
-            }
-            case _ => State.pure(())
-    end extension
+given ToByteStream[AtomCode] with
+  extension (atomCode: AtomCode) def toStream =
+    import AtomCode.*
+    atomCode match
+      case Raw(byteCode) => State.modify(_ << byteCode.code)
+      case RawByte(b) => State.modify(_ << b)
+      case RawBytes(bs) => State.modify(_ << bs)
+      case ctl: Control => State.modify { bs =>
+        if ctl.offset > 65536 || ctl.offset < -32768 then
+          sys.error("Unsupported long jump." + this)
+        else
+          bs << ctl.op << ctl.offset.asInstanceOf[U2]
+      }
+      case _ => State.pure(())
+  end extension
+
+
+
+
+object Code extends GeassCode, GeassUpperCase[Code] {
+  export AtomCode.*
+
+  given Geass[Code] = Code
+  // given Conversion[ByteCode, Code] with
+  //   def apply(byteCode: ByteCode): Code = Code(State.modify(_ << AtomCode.Raw(byteCode)))
+}
 
 
 
 
 
-object Code:
-    export ByteCode.*
-    export AtomCode.*
-
-    given Conversion[ByteCode, AtomCode] with
-        def apply(b: ByteCode) = AtomCode.Raw(b)
-
-    private inline def modify(f: CodeHandler => CodeHandler): Code = new Code(State.modify(f))
-    
-    def atom(a: AtomCode): Code = new Code(State.modify(_ << a))
-
-    def define(name: String)(codes: List[Code]): Code =
-        codes.foldLeft[Code](Comment(s"Define $name"))((acc, code) => acc << code)
-
-    case object Pass extends Code(State.pure(())):
-        override val size = 0
-    
-    /** Generates code to load constants, using the appropriate method depending on the values. */
-    object Load:
-        private def ldc_ref(cpRef: U2): Code = modify { ch => 
-            if cpRef <= 0xFF then ch << LDC << RawByte((cpRef & 0xFF).asInstanceOf[U1])
-            else ch << LDC_W << RawBytes(cpRef)
-        }
-        private def ldc2_ref(cpRef: U2): Code = modify { ch => 
-            ch << LDC2_W << RawBytes(cpRef)  
-        }
-
-        def apply(i: Int): Code = i match 
-            case -1 => modify(_ << ICONST_M1)
-            case 0  => modify(_ << ICONST_0)
-            case 1  => modify(_ << ICONST_1)
-            case 2  => modify(_ << ICONST_2)
-            case 3  => modify(_ << ICONST_3)
-            case 4  => modify(_ << ICONST_4)
-            case 5  => modify(_ << ICONST_5)
-            case _ if(i >= -128   && i <= 127  ) => modify(_ << BIPUSH << RawByte(i.asInstanceOf[U1]))
-            case _ if(i >= -32768 && i <= 32767) => modify(_ << SIPUSH << RawBytes(i.asInstanceOf[U2]))
-            case _ => modify { ch => ldc_ref(ch.constantPool.addInt(i)).runS(ch) }
 
 
-        def apply(f: Float): Code = f match 
-            case 0.0f => modify(_ << FCONST_0)
-            case 1.0f => modify(_ << FCONST_1)
-            case 2.0f => modify(_ << FCONST_2)
-            case _ => modify(ch => ldc_ref(ch.constantPool.addFloat(f)).runS(ch))
 
 
-        def apply(d: Double): Code = d match
-            case 0.0 => modify(_ << DCONST_0)
-            case 1.0 => modify(_ << DCONST_1)
-            case _ => modify(ch => ldc2_ref(ch.constantPool.addDouble(d)).runS(ch))
-        
 
-        def apply(l: Long): Code = l match
-            case 0l => modify(_ << LCONST_0)
-            case 1l => modify(_ << LCONST_1)
-            case _ => modify(ch => ldc2_ref(ch.constantPool.addLong(l)).runS(ch))
-        
+given Geass[Code] = new GeassCode()
+given JVMCode[Code] = new GeassCode()
 
-        def apply(s: String): Code = modify { ch => 
-            ldc_ref(ch.constantPool.addStringConstant(ch.constantPool.addString(s))).runS(ch)
-        }
 
-        def apply(c: Class[_]): Code = modify { ch => 
-            ldc_ref(ch.constantPool.addClass(ch.constantPool.addString(c.getName().replaceAll("\\.", "/"))))
-                .runS(ch)
-        }
+/**
+ * [[Geass[Code]]] implementation (Very dirty but composition is safe :).
+ * 
+ * Ireina
+ * 2021-07-02
+*/
+class GeassCode extends Geass[Code]:
+  import AtomCode.*
 
-        def apply(arg: Var): Code = ArgLoad(arg.id)
-        
-    end Load
+  given Conversion[ByteCode, AtomCode] with
+    def apply(b: ByteCode) = AtomCode.Raw(b)
 
-    object Store:
-        def apply(arg: Var) = ArgStore(arg.id)
-    end Store
+  private inline def modify(f: CodeHandler => CodeHandler): Code = 
+    new Code(State.modify(f))
+  
 
-    // IINC business
-    object IInc:
-        def apply(index: Int, inc: Int): Code = modify { ch => 
-            if(index <= 127 && inc >= -128 && inc <= 127) {
-                ch << IINC << RawByte(index.asInstanceOf[U1]) << RawByte(inc.asInstanceOf[U1])
-            } else if(index <= 32767 && inc >= -32768 && inc <= 32767) {
-                ch << WIDE << IINC << RawBytes(index.asInstanceOf[U2]) << RawBytes(index.asInstanceOf[U2])
-            } else {
-                sys.error("Index or increment too large in IInc " + index + " " + inc)
-            }
-        }
-    end IInc
+  override def atom(atomCode: AtomCode) = modify(_ << atomCode)
+  override def byte(byteCode: ByteCode) = modify(_ << AtomCode.Raw(byteCode))
 
-    // Loading and storing locals
-    private def storeLoad(
-        index: Int, name: String, bc: ByteCode,
-        bc0: ByteCode, bc1: ByteCode,
-        bc2: ByteCode, bc3: ByteCode
-    ): Code = {
+  override def store(x: Var) = Storing(x)
+  override def `return` = Returning
+  override def classOf(path: Path) = modify { ch =>
+    ch << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(path.src)))
+  }
 
-        modify { ch => index match
-            case 0 => ch << bc0
-            case 1 => ch << bc1
-            case 2 => ch << bc2
-            case 3 => ch << bc3
-            case _ if(index >= 0 && index <= 127) => ch << bc << RawByte(index.asInstanceOf[U1])
-            case _ if(index >= 0 && index <= 32767) => ch << WIDE << bc << RawBytes(index.asInstanceOf[U2])
-            case _ => sys.error("Invalid index in " + name + " " + index)
-        }
+  given Loadable[Int] with
+    extension (i: Int) def load: Code = Loading(i)
+
+  given Loadable[Float] with
+    extension (f: Float) def load: Code = Loading(f)
+
+  given Loadable[Double] with
+    extension (d: Double) def load: Code = Loading(d)
+
+  given Loadable[Long] with
+    extension (l: Long) def load: Code = Loading(l)
+
+  given Loadable[String] with
+    extension (s: String) def load: Code = Loading(s)
+
+  given Loadable[Class[?]] with
+    extension (c: Class[?]) def load: Code = Loading(c)
+
+  given Loadable[Var] with
+    extension (x: Var) def load: Code = Loading(x)
+
+
+
+  /** Generates code to load constants, using the appropriate method depending on the values. */
+  private object Loading:
+    private def ldc_ref(cpRef: U2): Code = modify { ch => 
+      if cpRef <= 0xFF then ch << LDC << RawByte((cpRef & 0xFF).asInstanceOf[U1])
+      else ch << LDC_W << RawBytes(cpRef)
     }
-    object ALoad { def apply(index: Int) = storeLoad(index, "ALoad", ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3) }
-    object DLoad { def apply(index: Int) = storeLoad(index, "DLoad", DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3) }
-    object FLoad { def apply(index: Int) = storeLoad(index, "FLoad", FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3) }
-    object ILoad { def apply(index: Int) = storeLoad(index, "ILoad", ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3) }
-    object LLoad { def apply(index: Int) = storeLoad(index, "LLoad", LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3) }
-    object AStore { def apply(index: Int) = storeLoad(index, "AStore", ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3) }
-    object DStore { def apply(index: Int) = storeLoad(index, "DStore", DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3) }
-    object FStore { def apply(index: Int) = storeLoad(index, "FStore", FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3) }
-    object IStore { def apply(index: Int) = storeLoad(index, "IStore", ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3) }
-    object LStore { def apply(index: Int) = storeLoad(index, "LStore", LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3) }
+    private def ldc2_ref(cpRef: U2): Code = modify { ch => 
+      ch << LDC2_W << RawBytes(cpRef)
+    }
+
+    def apply(i: Int): Code = i match 
+      case -1 => modify(_ << ICONST_M1)
+      case 0  => modify(_ << ICONST_0)
+      case 1  => modify(_ << ICONST_1)
+      case 2  => modify(_ << ICONST_2)
+      case 3  => modify(_ << ICONST_3)
+      case 4  => modify(_ << ICONST_4)
+      case 5  => modify(_ << ICONST_5)
+      case _ if i >= -128   && i <= 127   => modify(_ << BIPUSH << RawByte(i.asInstanceOf[U1]))
+      case _ if i >= -32768 && i <= 32767 => modify(_ << SIPUSH << RawBytes(i.asInstanceOf[U2]))
+      case _ => modify { ch => ldc_ref(ch.constantPool.addInt(i)).runS(ch) }
+
+
+    def apply(f: Float): Code = f match 
+      case 0.0f => modify(_ << FCONST_0)
+      case 1.0f => modify(_ << FCONST_1)
+      case 2.0f => modify(_ << FCONST_2)
+      case _ => modify(ch => ldc_ref(ch.constantPool.addFloat(f)).runS(ch))
+
+
+    def apply(d: Double): Code = d match
+      case 0.0 => modify(_ << DCONST_0)
+      case 1.0 => modify(_ << DCONST_1)
+      case _ => modify(ch => ldc2_ref(ch.constantPool.addDouble(d)).runS(ch))
     
-    object ArgLoad:
-        /** Loads an argument by its index in the argument list. 0 is the receiver
-         * for non-static methods. */
-        def apply(index : Int) : Code = modify { ch => 
-            ch.argSlotMap.get(index) match {
-                case None => sys.error("Invalid argument index : " + index)
-                case Some((t, i)) => t match 
-                    case "I" | "B" | "C" | "S" | "Z" => ILoad(i).runS(ch)
-                    case "F" => FLoad(i).runS(ch)
-                    case "J" => LLoad(i).runS(ch)
-                    case "D" => DLoad(i).runS(ch)
-                    case "V" => sys.error("Illegal argument of type `void` !?!")
-                    case _  => ALoad(i).runS(ch) // this is bold :)
-            }
-        }
-    end ArgLoad
 
-    object ArgStore:
-        /** Loads an argument by its index in the argument list. 0 is the receiver
-         * for non-static methods. */
-        def apply(index : Int) : Code = modify { ch => 
-            ch.argSlotMap.get(index) match {
-                case None => sys.error("Invalid argument index : " + index)
-                case Some((t, i)) => t match 
-                    case "I" | "B" | "C" | "S" | "Z" => IStore(i).runS(ch)
-                    case "F" => FStore(i).runS(ch)
-                    case "J" => LStore(i).runS(ch)
-                    case "D" => DStore(i).runS(ch)
-                    case "V" => sys.error("Illegal argument of type `void` !?!")
-                    case _  => AStore(i).runS(ch) // this is bold :)
-            }
-        }
-    end ArgStore
-
-    // Field access
-    object GetField  { def apply(className: Path, fieldName: String, fieldType: String) = accessField(GETFIELD,  className.src, fieldName, fieldType) }
-    object GetStatic { def apply(className: Path, fieldName: String, fieldType: String) = accessField(GETSTATIC, className.src, fieldName, fieldType) }
-    object PutField  { def apply(className: Path, fieldName: String, fieldType: String) = accessField(PUTFIELD,  className.src, fieldName, fieldType) }
-    object PutStatic { def apply(className: Path, fieldName: String, fieldType: String) = accessField(PUTSTATIC, className.src, fieldName, fieldType) }
-
-    private def accessField(bc: ByteCode, className: String, fieldName: String, fieldType: String): Code =
-        modify { ch => {
-            ch << bc << RawBytes(ch.constantPool.addFieldRef(
-                ch.constantPool.addClass(ch.constantPool.addString(className)),
-                ch.constantPool.addNameAndType(
-                ch.constantPool.addString(fieldName),
-                ch.constantPool.addString(fieldType))))
-            }
-        }
+    def apply(l: Long): Code = l match
+      case 0l => modify(_ << LCONST_0)
+      case 1l => modify(_ << LCONST_1)
+      case _ => modify(ch => ldc2_ref(ch.constantPool.addLong(l)).runS(ch))
     
-    // Method invocations
 
-    object InvokeInterface:
-        def apply(className: Path, methodName: String, methodSig: String): Code = 
-            modify { ch => 
-                invokeMethod(INVOKEINTERFACE, className.src, methodName, methodSig).runS(ch) << 
-                    RawByte(methodSignatureArgStackEffect(methodSig) + 1) << 
-                    RawByte(0)
-            }
+    def apply(s: String): Code = modify { ch => 
+      ldc_ref(ch.constantPool.addStringConstant(ch.constantPool.addString(s))).runS(ch)
+    }
+
+    def apply(c: Class[?]): Code = modify { ch => 
+      ldc_ref(ch.constantPool.addClass(ch.constantPool.addString(c.getName().replaceAll("\\.", "/"))))
+        .runS(ch)
+    }
+
+    def apply(arg: Var): Code = ArgLoad(arg.id)
+      
+  end Loading
+
+  object Storing:
+    def apply(arg: Var) = ArgStore(arg.id)
+  end Storing
+
+  // IINC business
+  object IInc:
+    def apply(index: Int, inc: Int): Code = modify { ch => 
+      if(index <= 127 && inc >= -128 && inc <= 127) {
+        ch << IINC << RawByte(index.asInstanceOf[U1]) << RawByte(inc.asInstanceOf[U1])
+      } else if(index <= 32767 && inc >= -32768 && inc <= 32767) {
+        ch << WIDE << IINC << RawBytes(index.asInstanceOf[U2]) << RawBytes(index.asInstanceOf[U2])
+      } else {
+        sys.error("Index or increment too large in IInc " + index + " " + inc)
+      }
+    }
+  end IInc
+
+  // Loading and storing locals
+  private def storeLoad(
+    index: Int, name: String, bc: ByteCode,
+    bc0: ByteCode, bc1: ByteCode,
+    bc2: ByteCode, bc3: ByteCode
+  ): Code = {
+
+    modify { ch => index match
+      case 0 => ch << bc0
+      case 1 => ch << bc1
+      case 2 => ch << bc2
+      case 3 => ch << bc3
+      case _ if(index >= 0 && index <= 127) => ch << bc << RawByte(index.asInstanceOf[U1])
+      case _ if(index >= 0 && index <= 32767) => ch << WIDE << bc << RawBytes(index.asInstanceOf[U2])
+      case _ => sys.error("Invalid index in " + name + " " + index)
+    }
+  }
+  object ALoad { def apply(index: Int) = storeLoad(index, "ALoad", ALOAD, ALOAD_0, ALOAD_1, ALOAD_2, ALOAD_3) }
+  object DLoad { def apply(index: Int) = storeLoad(index, "DLoad", DLOAD, DLOAD_0, DLOAD_1, DLOAD_2, DLOAD_3) }
+  object FLoad { def apply(index: Int) = storeLoad(index, "FLoad", FLOAD, FLOAD_0, FLOAD_1, FLOAD_2, FLOAD_3) }
+  object ILoad { def apply(index: Int) = storeLoad(index, "ILoad", ILOAD, ILOAD_0, ILOAD_1, ILOAD_2, ILOAD_3) }
+  object LLoad { def apply(index: Int) = storeLoad(index, "LLoad", LLOAD, LLOAD_0, LLOAD_1, LLOAD_2, LLOAD_3) }
+  object AStore { def apply(index: Int) = storeLoad(index, "AStore", ASTORE, ASTORE_0, ASTORE_1, ASTORE_2, ASTORE_3) }
+  object DStore { def apply(index: Int) = storeLoad(index, "DStore", DSTORE, DSTORE_0, DSTORE_1, DSTORE_2, DSTORE_3) }
+  object FStore { def apply(index: Int) = storeLoad(index, "FStore", FSTORE, FSTORE_0, FSTORE_1, FSTORE_2, FSTORE_3) }
+  object IStore { def apply(index: Int) = storeLoad(index, "IStore", ISTORE, ISTORE_0, ISTORE_1, ISTORE_2, ISTORE_3) }
+  object LStore { def apply(index: Int) = storeLoad(index, "LStore", LSTORE, LSTORE_0, LSTORE_1, LSTORE_2, LSTORE_3) }
+  
+  object ArgLoad:
+    /** Loads an argument by its index in the argument list. 0 is the receiver
+     * for non-static methods. */
+    def apply(index : Int) : Code = modify { ch => 
+      ch.argSlotMap.get(index) match {
+        case None => sys.error("Invalid argument index : " + index)
+        case Some((t, i)) => t match 
+          case "I" | "B" | "C" | "S" | "Z" => ILoad(i).runS(ch)
+          case "F" => FLoad(i).runS(ch)
+          case "J" => LLoad(i).runS(ch)
+          case "D" => DLoad(i).runS(ch)
+          case "V" => sys.error("Illegal argument of type `void` !?!")
+          case _  => ALoad(i).runS(ch) // this is bold :)
+      }
+    }
+  end ArgLoad
+
+  object ArgStore:
+    /** Loads an argument by its index in the argument list. 0 is the receiver
+     * for non-static methods. */
+    def apply(index : Int) : Code = modify { ch => 
+      ch.argSlotMap.get(index) match {
+        case None => sys.error("Invalid argument index : " + index)
+        case Some((t, i)) => t match 
+          case "I" | "B" | "C" | "S" | "Z" => IStore(i).runS(ch)
+          case "F" => FStore(i).runS(ch)
+          case "J" => LStore(i).runS(ch)
+          case "D" => DStore(i).runS(ch)
+          case "V" => sys.error("Illegal argument of type `void` !?!")
+          case _  => AStore(i).runS(ch) // this is bold :)
+      }
+    }
+  end ArgStore
+
+  
+  override protected def accessField
+    (bc: ByteCode, className: String, fieldName: String, fieldType: String) =
+    modify { ch => {
+      ch << bc << RawBytes(ch.constantPool.addFieldRef(
+        ch.constantPool.addClass(ch.constantPool.addString(className)),
+        ch.constantPool.addNameAndType(
+        ch.constantPool.addString(fieldName),
+        ch.constantPool.addString(fieldType))))
+      }
+    }
+  
+  // Method invocations
+  override protected def invokeMethod
+    (bc: ByteCode, className: String, methodName: String, methodSig: String) = 
+    modify { ch => 
+      val addMethodRef = if bc == INVOKEINTERFACE 
+        then ch.constantPool.addInterfaceMethodRef
+        else ch.constantPool.addMethodRef
+      
+      ch << bc << RawBytes(addMethodRef(
+        ch.constantPool.addClass(ch.constantPool.addString(className)),
+        ch.constantPool.addNameAndType(
+          ch.constantPool.addString(methodName),
+          ch.constantPool.addString(methodSig))
+        ))
+    }
+
+  // misc
+  def `new`(className: Path) : Code = modify { ch => 
+    ch << NEW << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src)))
+  }
+
+  def defaultNew(className: Path): Code = modify { ch => 
+    ch << NEW << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src))) << DUP 
+    invokeSpecial(className, "<init>", "()V").runS(ch)
+  }
+
+  def instanceOf(className: Path): Code = modify { ch => 
+    ch << INSTANCEOF << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src)))
+  }
+
+  def checkCast(className: Path): Code = modify { ch => 
+    ch << CHECKCAST << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src)))
+  }
+
+  object CreateArray:
+    def apply(arrayType: String): Code = modify { ch => 
+        ch << ANEWARRAY << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(arrayType)))
+    }
+
+    def apply(tpe: Int): Code = modify { ch => 
+        ch << NEWARRAY << RawByte(tpe)
+    }
+
+    def primitive(tpe: String): Code = { // with type string
+        apply(types(tpe))
+    }
+
+    val types = Map(
+        "T_BOOLEAN" -> 4,
+        "T_CHAR"    -> 5,
+        "T_FLOAT"   -> 6,
+        "T_DOUBLE"  -> 7,
+        "T_BYTE"    -> 8,
+        "T_SHORT"   -> 9,
+        "T_INT"     -> 10,
+        "T_LONG"    -> 11
+    )
+  end CreateArray
+
+  override def newArray(arrayType: String) = CreateArray(arrayType)
+  override def newArray(tpe: Int) = CreateArray(tpe)
+
+  
+
+  case object Returning extends Code(State.modify { ch =>
+    val code = ch.retType match
+      case "I" | "B" | "C" | "S" | "Z" => IRETURN
+      case "F" => FRETURN
+      case "D" => DRETURN
+      case "J" => LRETURN
+      case "V" => RETURN
+      case obj => ARETURN
+    ch << code
+  }) { override val size = 1 }
 
 
-    object InvokeSpecial:
-        def apply(className: Path, methodName: String, methodSig: String): Code =
-            invokeMethod(INVOKESPECIAL, className.src, methodName, methodSig)
+  case object PrintCode extends Code(State.modify { ch =>
+    ch.print()
+    ch
+  })
+  val printCode = PrintCode
 
+  case class Inspect(inpect: CodeHandler => Unit) extends Code(State.modify {
+    ch => inpect(ch); ch
+  })
+  val inspect = Inspect
 
-    object InvokeStatic:
-        def apply(className: Path, methodName: String, methodSig: String): Code =
-            invokeMethod(INVOKESTATIC, className.src, methodName, methodSig)
+  case class NewCode(inpect: CodeHandler => CodeHandler) extends Code(State.modify {
+    ch => inpect(ch)
+  })
+  val newCode = NewCode
 
-
-    object InvokeVirtual:
-        def apply(className: Path, methodName: String, methodSig: String): Code =
-            invokeMethod(INVOKEVIRTUAL, className.src, methodName, methodSig)
-
-
-    private def invokeMethod(bc: ByteCode, className: String, methodName: String, methodSig: String): Code = 
-        modify { ch => 
-            val addMethodRef = if bc == INVOKEINTERFACE 
-                then ch.constantPool.addInterfaceMethodRef
-                else ch.constantPool.addMethodRef
-            
-            ch << bc << RawBytes(addMethodRef(
-                ch.constantPool.addClass(ch.constantPool.addString(className)),
-                ch.constantPool.addNameAndType(
-                    ch.constantPool.addString(methodName),
-                    ch.constantPool.addString(methodSig))
-                ))
-        }
-
-
-    // misc
-
-    object New:
-        def apply(className: Path) : Code = modify { ch => 
-            ch << NEW << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src)))
-        }
-
-    object DefaultNew:
-        def apply(className: Path): Code = modify { ch => 
-            ch << NEW << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src))) << DUP 
-            InvokeSpecial(className, "<init>", "()V").runS(ch)
-        }
-
-
-    object InstanceOf:
-        def apply(className: Path): Code = modify { ch => 
-            ch << INSTANCEOF << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src)))
-        }
-
-    object CheckCast:
-        def apply(className: Path): Code = modify { ch => 
-            ch << CHECKCAST << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(className.src)))
-        }
-
-    object NewArray:
-        def apply(arrayType: String): Code = modify { ch => 
-            ch << ANEWARRAY << RawBytes(ch.constantPool.addClass(ch.constantPool.addString(arrayType)))
-        }
-
-        def apply(tpe: Int): Code = modify { ch => 
-            ch << NEWARRAY << RawByte(tpe)
-        }
-
-        def primitive(tpe: String): Code = { // with type string
-            apply(types(tpe))
-        }
-
-        val types = Map(
-            "T_BOOLEAN" -> 4,
-            "T_CHAR"    -> 5,
-            "T_FLOAT"   -> 6,
-            "T_DOUBLE"  -> 7,
-            "T_BYTE"    -> 8,
-            "T_SHORT"   -> 9,
-            "T_INT"     -> 10,
-            "T_LONG"    -> 11
-        )
-    end NewArray
-
-
-    case object Return extends Code(State.modify { ch =>
-        val code = ch.retType match
-            case "I" | "B" | "C" | "S" | "Z" => IRETURN
-            case "F" => FRETURN
-            case "D" => DRETURN
-            case "J" => LRETURN
-            case "V" => RETURN
-            case obj => ARETURN
-        ch << code
-    }) { override val size = 1 }
-
-    // So that we can annotate our generated code before freezing
-    case class Comment(comment: String) extends Code(State.pure(())):
-        override val size: Int = 0
-
-    case object PrintCode extends Code(State.modify { ch =>
-        ch.print()
-        ch
-    })
-
-    case class Inspect(inpect: CodeHandler => Unit) extends Code(State.modify {
-        ch => inpect(ch); ch
-    })
-
-    case class NewCode(inpect: CodeHandler => CodeHandler) extends Code(State.modify {
-        ch => inpect(ch)
-    })
-
-end Code
+end GeassCode
 
 
 
 
 
-given Conversion[ByteCode, Code] with
-    def apply(byteCode: ByteCode): Code = new Code(State.modify(_ << AtomCode.Raw(byteCode)))
+
+
+
+
+
+
 
 given Conversion[Int, Option[Int]] with
-    def apply(i: Int): Option[Int] = Some(i)
+  def apply(i: Int): Option[Int] = Some(i)
 
-enum ByteCode(val code: U1, se: Option[Int], l: Option[Int]) extends Streamable:
+enum ByteCode(val code: U1, se: Option[Int], l: Option[Int]) extends ByteStreamable:
     val stackEffect: Option[Int] = se
     val length: Option[Int] = l
     override def stream = State.modify(_ << code)

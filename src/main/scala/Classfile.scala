@@ -10,16 +10,14 @@ import cats.syntax.functor.*
 import cats.syntax.applicative.*
 
 
-trait JVMClass[F[_]: Monad, Code: Geass](using 
-  ev0: ToStream[F, U2],
-  ev1: ToStream[F, U4],
-  ev2: ToStream[F, MethodInfo],
-  ev3: ToStream[F, FieldInfo],
-  ev4: ToStream[F, InterfaceInfo],
-  ev5: ToStream[F, AttributeInfo],
-  ev6: ToStream[F, ConstantPool],
-  ev7: Monoid[F[Unit]],
-) extends Streamable[F]:
+trait JVMClass[F[_]: Monad, 
+  Code: Geass,
+  MethodInfo,
+  FieldInfo,
+  InterfaceInfo,
+  AttributeInfo,
+  ConstantPool,
+]:
   import Type.*
   import Defaults.*
 
@@ -38,29 +36,63 @@ trait JVMClass[F[_]: Monad, Code: Geass](using
   def interfaces  : List[InterfaceInfo]
   def attributes  : List[AttributeInfo]
 
-  override def stream: F[Unit] = {
-    given [A: [T] =>> ToStream[F, T]]: Conversion[A, F[Unit]] = _.toStream
-    magic.toStream
-    >> version.minor
-    >> version.major
-    >> constantPool
-    >> flags
-    >> thisClass
-    >> superClass
-    >> (interfaces.size: U2) >> interfaces
-    >> (fields.size    : U2) >> fields
-    >> (methods.size   : U2) >> methods
-    >> (attributes.size: U2) >> attributes
-  }
 end JVMClass
 
 
+abstract class JVMClassFile[F[_]: Monad, 
+  Code: Geass,
+  MethodInfo,
+  FieldInfo,
+  InterfaceInfo,
+  AttributeInfo,
+  ConstantPool,
+] (using 
+  ev0: ToStream[F, U2],
+  ev1: ToStream[F, U4],
+  ev2: ToStream[F, MethodInfo],
+  ev3: ToStream[F, FieldInfo],
+  ev4: ToStream[F, InterfaceInfo],
+  ev5: ToStream[F, AttributeInfo],
+  ev6: ToStream[F, ConstantPool],
+  ev7: Monoid[F[Unit]],
+) extends 
+  JVMClass[F, 
+    Code, 
+    MethodInfo, FieldInfo, InterfaceInfo, AttributeInfo, ConstantPool
+  ], Streamable[F]:
+
+  override def stream: F[Unit] = {
+    given [A: [T] =>> ToStream[F, T]]: Conversion[A, F[Unit]] = _.toStream
+    magic.toStream
+      >> version.minor
+      >> version.major
+      >> constantPool
+      >> flags
+      >> thisClass
+      >> superClass
+      >> (interfaces.size: U2) >> interfaces
+      >> (fields    .size: U2) >> fields
+      >> (methods   .size: U2) >> methods
+      >> (attributes.size: U2) >> attributes
+  }
+
+end JVMClassFile
 
 
+
+
+
+
+/**
+ * An implementation of JVM class file
+*/
 class ClassFile(
   val className: String, 
   val superName: Option[String] = None
-) extends JVMClass[ByteStreamState, Code]:
+) extends 
+  JVMClassFile[ByteStreamState, Code, 
+    MethodInfo, FieldInfo, InterfaceInfo, AttributeInfo, ConstantPool
+  ]:
 
   import Type.*
   import Defaults.*

@@ -1,7 +1,7 @@
 package bytc
 
 object Flag {
-  import Type._
+  import Type.*
 
   val CLASS_ACC_PUBLIC : U2        = 0x0001
   val CLASS_ACC_FINAL : U2         = 0x0010

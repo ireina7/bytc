@@ -1,6 +1,6 @@
 package bytc
 
-import Type._
+import Type.*
 
 /** A field handler is used to attach attributes to a field (currently, only
  * flags). <code>FieldHandler</code>s should not be created manually but

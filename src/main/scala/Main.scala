@@ -23,7 +23,7 @@ end main
 def classFile = {
   import Code.*
   import ClassFile.Operation.{
-    Define => DefineClass,
+    Define as DefineClass,
     *
   }
 

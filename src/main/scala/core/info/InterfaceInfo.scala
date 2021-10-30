@@ -1,6 +1,6 @@
 package bytc
 
-import Type._
+import Type.*
 import cats.data.State
 
 case class InterfaceInfo(interfaceName: String, nameIndex: U2) extends ByteStreamable {

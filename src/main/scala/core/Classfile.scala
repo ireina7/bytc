@@ -8,82 +8,30 @@ import Type.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.applicative.*
+import Defaults.*
 
 
 
-/**
- * The top of all Class File abstractions
-*/
-trait IsJVMClass[F[_]: Functor,
-  JVMClass,
-  Code: Geass,
-  MethodInfo,
-  FieldInfo,
-  InterfaceInfo,
-  AttributeInfo,
-  ConstantPool,
-]:
-  import Type.*
-  import Defaults.*
+abstract class JVMClass:
+  def magic: U4 = defaultMagic
+  def version: Version
+  def className: String
+  def superName: Option[String]
 
-  extension (jvmClass: JVMClass)
-    def magic    : F[U4]
-    def version  : F[Version]
-    def className: F[String]
-    def superName: F[Option[String]]
-    def superClassName: F[String] = superName.map(_.getOrElse(defaultSuperClass))
-
-    def thisClass   : F[U2]
-    def superClass  : F[U2]
-    def flags       : F[U2]
-    def constantPool: F[ConstantPool]
-    def methods     : F[List[MethodInfo   ]]
-    def fields      : F[List[FieldInfo    ]]
-    def interfaces  : F[List[InterfaceInfo]]
-    def attributes  : F[List[AttributeInfo]]
-
-end IsJVMClass
-
-
-trait JVMClass[F[_],
-  Code: Geass,
-  MethodInfo,
-  FieldInfo,
-  InterfaceInfo,
-  AttributeInfo,
-  ConstantPool,
-]:
-  import Type.*
-  import Defaults.*
-
-  val magic: U4 = defaultMagic
-  val version: Version = Version(defaultMajor, defaultMinor)
-  val className: String
-  val superName: Option[String]
-  val superClassName: String = superName.getOrElse(defaultSuperClass)
-
-  def thisClass   : U2
-  def superClass  : U2
-  def flags       : U2
+  def thisClass: U2
+  def superClass: U2
+  def flags: U2
   def constantPool: ConstantPool
-  def methods     : List[MethodInfo   ]
-  def fields      : List[FieldInfo    ]
-  def interfaces  : List[InterfaceInfo]
-  def attributes  : List[AttributeInfo]
+  def methods: List[MethodInfo]
+  def fields: List[FieldInfo]
+  def interfaces: List[InterfaceInfo]
+  def attributes: List[AttributeInfo]
 
+  def superClassName = superName.getOrElse(defaultSuperClass)
 end JVMClass
 
-// given []
 
-
-abstract class JVMClassFile[F[_]: Monad, 
-  Code: Geass,
-  MethodInfo,
-  FieldInfo,
-  InterfaceInfo,
-  AttributeInfo,
-  ConstantPool,
-](using 
+given [F[_]: Monad](using 
   ToStream[F, U2],
   ToStream[F, U4],
   ToStream[F, MethodInfo],
@@ -92,30 +40,27 @@ abstract class JVMClassFile[F[_]: Monad,
   ToStream[F, AttributeInfo],
   ToStream[F, ConstantPool],
   Monoid[F[Unit]],
-) extends 
-  JVMClass[F, 
-    Code, 
-    MethodInfo, FieldInfo, InterfaceInfo, AttributeInfo, ConstantPool
-  ], Streamable[F]:
-
-  override def stream: F[Unit] = {
+): ToStream[F, JVMClass] with {
+  extension (x: JVMClass) def toStream: F[Unit] = {
     given [A: [T] =>> ToStream[F, T]]: Conversion[A, F[Unit]] = _.toStream
-    magic.toStream
-      >> version.minor
-      >> version.major
-      >> constantPool
-      >> flags
-      >> thisClass
-      >> superClass
-      >> (interfaces.size: U2) >> interfaces
-      >> (fields    .size: U2) >> fields
-      >> (methods   .size: U2) >> methods
-      >> (attributes.size: U2) >> attributes
+    x.magic.toStream
+      >> x.version.minor
+      >> x.version.major
+      >> x.constantPool
+      >> x.flags
+      >> x.thisClass
+      >> x.superClass
+      >> (x.interfaces.size: U2) >> x.interfaces
+      >> (x.fields    .size: U2) >> x.fields
+      >> (x.methods   .size: U2) >> x.methods
+      >> (x.attributes.size: U2) >> x.attributes
   }
+}
 
-end JVMClassFile
-
-
+given [F[_], T <: JVMClass](using ToStream[F, JVMClass]): ToStream[F, T] with {
+  extension (x: T) def toStream: F[Unit] = 
+    x.asInstanceOf[JVMClass].toStream
+}
 
 
 
@@ -126,15 +71,12 @@ end JVMClassFile
 class ClassFile(
   val className: String, 
   val superName: Option[String] = None
-) extends 
-  JVMClassFile[ByteStreamState, Code, 
-    MethodInfo, FieldInfo, InterfaceInfo, AttributeInfo, ConstantPool
-  ]:
+) extends JVMClass:
 
   import Type.*
   import Defaults.*
   
-
+  def version = Version(defaultMajor, defaultMinor)
   def thisClass = _thisClass
   def superClass = _superClass
   def flags = accessFlags
@@ -161,6 +103,7 @@ class ClassFile(
   private var methodsBuffer    : List[MethodInfo]    = Nil
   private var interfacesBuffer : List[InterfaceInfo] = Nil
   private var attributesBuffer : List[AttributeInfo] = Nil
+
   
   def addInterface(name: String) = {
     val nameIndex = _constantPool.addClass(_constantPool.addString(name))
@@ -232,7 +175,7 @@ class ClassFile(
   /** Adds a default constructor. */
   def addDefaultConstructor: Result[Unit] = {
     import Code.*
-
+    
     addConstructor(Nil) {
       ALOAD_0 <<
       InvokeSpecial(Path(superClassName), constructorName, "()V") <<

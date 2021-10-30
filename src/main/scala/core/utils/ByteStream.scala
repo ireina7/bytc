@@ -16,10 +16,6 @@ trait Streamable[F[_]]:
   def stream: F[Unit]
 
 
-given [F[_], T <: Streamable[F]]: ToStream[F, T] with
-  extension (x: T) override def toStream = x.stream
-
-
 type ToByteStream[A]    = ToStream  [[T] =>> State[ByteStream, T], A]
 type ByteStreamable     = Streamable[[T] =>> State[ByteStream, T]   ]
 type ByteStreamState[A] = State[ByteStream, A]
@@ -27,6 +23,9 @@ type ByteStreamState[A] = State[ByteStream, A]
 
 object ToStream:
   import Type.*
+
+  given [F[_], T <: Streamable[F]]: ToStream[F, T] with
+    extension (x: T) override def toStream = x.stream
 
   given ToByteStream[U1] with {
     extension (u1: U1) def toStream = State.modify(_ << u1)
@@ -74,7 +73,12 @@ class ByteStream {
 
   private var bytes = new ByteArrayOutputStream
   private var stream: DataOutputStream = new DataOutputStream(bytes)
-  def getBytes : Array[Byte] = { stream.flush(); bytes.toByteArray }
+  def getBytes : Array[Byte] = { 
+    stream.flush() 
+    bytes.toByteArray match 
+      case null => Array.empty[Byte]
+      case okkk: Array[Byte] => okkk
+  }
 
   // appends bytes to the stream
   def <<(u1: U1): ByteStream = { stream.write(u1); this }

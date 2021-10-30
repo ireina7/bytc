@@ -70,9 +70,10 @@ object Type {
     given FromType[JVMType] with
         override inline def from[T]: JVMType = {
             import scala.compiletime.erasedValue
+            import compiletime.asMatchable
             import JVMType.{from as _, *}
 
-            inline erasedValue[T] match
+            inline erasedValue[T].asMatchable match
                 case _: Int       => I
                 case _: Short     => S
                 case _: Long      => J

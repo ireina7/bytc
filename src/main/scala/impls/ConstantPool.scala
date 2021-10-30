@@ -1,7 +1,7 @@
 package bytc
 
 
-import Type._
+import Type.*
 import cats.data.State
 
 class ConstantPool extends ByteStreamable {

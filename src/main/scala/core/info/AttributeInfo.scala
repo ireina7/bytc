@@ -1,14 +1,14 @@
 package bytc
 
 
-import Type._
+import Type.*
 import cats.data.State
 
 object AttributeInfo {
     def apply(attributeNameIndex: U2, info: Seq[U1]) : AttributeInfo =
         new AttributeInfo(attributeNameIndex, info)
 
-    def unapply(ai: AttributeInfo) : Option[(U2,Seq[U1])] =
+    def unapply(ai: AttributeInfo | Null) : Option[(U2,Seq[U1])] =
         if(ai == null) None else Some((ai.attributeNameIndex, ai.info))
 }
 
@@ -28,7 +28,7 @@ object CodeAttributeInfo {
   def apply(codeNameIndex: U2) : CodeAttributeInfo =
     new CodeAttributeInfo(codeNameIndex)
 
-  def unapply(cai: CodeAttributeInfo) : Option[U2] =
+  def unapply(cai: CodeAttributeInfo | Null) : Option[U2] =
     if(cai == null) None else Some(cai.codeNameIndex)
 }
 

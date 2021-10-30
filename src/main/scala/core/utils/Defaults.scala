@@ -2,8 +2,8 @@ package bytc
 
 
 object Defaults {
-    import Type._
-    import Flag._
+    import Type.*
+    import Flag.*
 
     inline val defaultMagic = 0xCAFEBABE
     inline val defaultMinor = 0

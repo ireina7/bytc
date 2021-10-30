@@ -1,6 +1,6 @@
 package bytc
 
-import Type._
+import Type.*
 
 /** A method handler is used to attach attributes to a method. In particular,
  * it can return an associated `CodeHandler` which can be used to

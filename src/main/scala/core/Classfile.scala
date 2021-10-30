@@ -3,7 +3,7 @@ package bytc
 import scala.language.implicitConversions
 import cats.*
 import cats.data.State
-import bytc.ClassFile.Operation
+// import bytc.ClassFile.Operation
 import Type.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
@@ -12,26 +12,66 @@ import Defaults.*
 
 
 
-abstract class JVMClass:
-  def magic: U4 = defaultMagic
-  def version: Version
-  def className: String
-  def superName: Option[String]
+trait IsJVMClass[F[_]: Monad, JVMClass]:
+  extension (jvmClass: JVMClass)
+    def magic       : F[U4] = defaultMagic.pure
+    def version     : F[Version]
+    def className   : F[String]
+    def superName   : F[Option[String]]
 
-  def thisClass: U2
-  def superClass: U2
-  def flags: U2
-  def constantPool: ConstantPool
-  def methods: List[MethodInfo]
-  def fields: List[FieldInfo]
-  def interfaces: List[InterfaceInfo]
-  def attributes: List[AttributeInfo]
+    def thisClass   : F[U2]
+    def superClass  : F[U2]
+    def flags       : F[U2]
+    def constantPool: F[ConstantPool]
+    def methods     : F[List[MethodInfo   ]]
+    def fields      : F[List[FieldInfo    ]]
+    def interfaces  : F[List[InterfaceInfo]]
+    def attributes  : F[List[AttributeInfo]]
+    def superClassName: F[String] = superName.map(_.getOrElse(defaultSuperClass))
+end IsJVMClass
 
-  def superClassName = superName.getOrElse(defaultSuperClass)
-end JVMClass
+
+object IsJVMClass {
+
+  given IsJVMClass[Id, ClassFile] with {
+    extension (o: ClassFile)
+      def version = o.getVersion
+      def className = o.getClassName
+      def superName = o.getSuperName
+
+      def thisClass = o.getThisClass
+      def superClass = o.getSuperClass
+      def flags = o.getFlags
+      def constantPool = o.getConstantPool
+      def methods = o.getMethods
+      def fields = o.getFields
+      def interfaces = o.getInterfaces
+      def attributes = o.getAttributes
+  }
+
+  given [F[_]: Monad, JVMClass](using idEv: IsJVMClass[Id, JVMClass])
+    : IsJVMClass[F, JVMClass] with {
+    extension (o: JVMClass)
+      def version = idEv.version(o).pure
+      def className = idEv.className(o).pure
+      def superName = idEv.superName(o).pure
+
+      def thisClass = idEv.thisClass(o).pure
+      def superClass = idEv.superClass(o).pure
+      def flags = idEv.flags(o).pure
+      def constantPool = idEv.constantPool(o).pure
+      def methods = idEv.methods(o).pure
+      def fields = idEv.fields(o).pure
+      def interfaces = idEv.interfaces(o).pure
+      def attributes = idEv.attributes(o).pure
+  }
+}
 
 
-given [F[_]: Monad](using 
+
+
+given [F[_]: Monad, JVMClass](using 
+  IsJVMClass[F, JVMClass],
   ToStream[F, U2],
   ToStream[F, U4],
   ToStream[F, MethodInfo],
@@ -43,24 +83,33 @@ given [F[_]: Monad](using
 ): ToStream[F, JVMClass] with {
   extension (x: JVMClass) def toStream: F[Unit] = {
     given [A: [T] =>> ToStream[F, T]]: Conversion[A, F[Unit]] = _.toStream
-    x.magic.toStream
-      >> x.version.minor
-      >> x.version.major
-      >> x.constantPool
-      >> x.flags
-      >> x.thisClass
-      >> x.superClass
-      >> (x.interfaces.size: U2) >> x.interfaces
-      >> (x.fields    .size: U2) >> x.fields
-      >> (x.methods   .size: U2) >> x.methods
-      >> (x.attributes.size: U2) >> x.attributes
+    for {
+      magic        <- x.magic
+      version      <- x.version
+      constantPool <- x.constantPool
+      flags        <- x.flags
+      thisClass    <- x.thisClass
+      superClass   <- x.superClass
+      interfaces   <- x.interfaces
+      fields       <- x.fields
+      methods      <- x.methods
+      attributes   <- x.attributes
+      stream       <- magic.toStream
+                        >> version.minor
+                        >> version.major
+                        >> constantPool
+                        >> flags
+                        >> thisClass
+                        >> superClass
+                        >> (interfaces.size: U2) >> interfaces
+                        >> (fields    .size: U2) >> fields
+                        >> (methods   .size: U2) >> methods
+                        >> (attributes.size: U2) >> attributes
+    } yield stream
   }
 }
 
-given [F[_], T <: JVMClass](using ToStream[F, JVMClass]): ToStream[F, T] with {
-  extension (x: T) def toStream: F[Unit] = 
-    x.asInstanceOf[JVMClass].toStream
-}
+
 
 
 
@@ -71,20 +120,23 @@ given [F[_], T <: JVMClass](using ToStream[F, JVMClass]): ToStream[F, T] with {
 class ClassFile(
   val className: String, 
   val superName: Option[String] = None
-) extends JVMClass:
+):
 
   import Type.*
   import Defaults.*
+  import IsJVMClass.given
   
-  def version = Version(defaultMajor, defaultMinor)
-  def thisClass = _thisClass
-  def superClass = _superClass
-  def flags = accessFlags
-  def constantPool = _constantPool
-  def fields = fieldsBuffer
-  def methods = methodsBuffer
-  def interfaces = interfacesBuffer.reverse
-  def attributes = attributesBuffer
+  def getClassName = className
+  def getSuperName = superName
+  def getVersion = Version(defaultMajor, defaultMinor)
+  def getThisClass = _thisClass
+  def getSuperClass = _superClass
+  // def getFlags = accessFlags
+  def getConstantPool = _constantPool
+  def getFields = fieldsBuffer
+  def getMethods = methodsBuffer
+  def getInterfaces = interfacesBuffer.reverse
+  def getAttributes = attributesBuffer
 
   private var _constantPool = new ConstantPool()
   lazy val codeNameIndex: U2 = _constantPool.addString("Code") // Never change this since JVM defines this
@@ -97,7 +149,7 @@ class ClassFile(
   //   case None => "java/lang/Object"
   //   case Some(name) => name
   // }
-  private var _superClass: U2 = _constantPool.addClass(_constantPool.addString(superClassName))
+  private var _superClass: U2 = _constantPool.addClass(_constantPool.addString(this.superClassName))
 
   private var fieldsBuffer     : List[FieldInfo]     = Nil
   private var methodsBuffer    : List[MethodInfo]    = Nil
@@ -178,25 +230,10 @@ class ClassFile(
     
     addConstructor(Nil) {
       ALOAD_0 <<
-      InvokeSpecial(Path(superClassName), constructorName, "()V") <<
+      InvokeSpecial(Path(this.superClassName), constructorName, "()V") <<
       RETURN
     }
   }
-
-
-  // override def stream = State.modify { _
-  //   << magic
-  //   << version.minor
-  //   << version.major
-  //   << constantPool
-  //   << accessFlags
-  //   << thisClass
-  //   << superClass
-  //   << (interfaces.size: U2) << interfaces.reverse
-  //   << (fields.size    : U2) << fields
-  //   << (methods.size   : U2) << methods
-  //   << (attributes.size: U2) << attributes
-  // }
 
   /** Writes the binary representation of this class file to a file. */
   def writeToFile(fileName: String = s"$className.class") = {
